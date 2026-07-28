@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import hashlib
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -13,6 +14,29 @@ logger = logging.getLogger(__name__)
 _collection = None
 
 
+class LocalHashEmbeddingFunction:
+    """Small local embedding function that avoids model downloads in restricted envs."""
+
+    dimension = 384
+
+    @staticmethod
+    def name() -> str:
+        return "local_hash_embedding"
+
+    def __call__(self, input: list[str]) -> list[list[float]]:
+        embeddings: list[list[float]] = []
+        for text in input:
+            vector = [0.0] * self.dimension
+            tokens = str(text).lower().split()
+            for token in tokens:
+                digest = hashlib.sha256(token.encode("utf-8")).digest()
+                index = int.from_bytes(digest[:4], "big") % self.dimension
+                vector[index] += 1.0
+            norm = sum(value * value for value in vector) ** 0.5 or 1.0
+            embeddings.append([value / norm for value in vector])
+        return embeddings
+
+
 def initialize_database():
     """Create and return the persistent collection used for startup documents."""
     global _collection
@@ -20,7 +44,10 @@ def initialize_database():
         database_path = Path(os.getenv("CHROMA_PATH", "./chroma_data"))
         database_path.mkdir(parents=True, exist_ok=True)
         client = chromadb.PersistentClient(path=str(database_path))
-        _collection = client.get_or_create_collection(name="startup_reports")
+        _collection = client.get_or_create_collection(
+            name="startup_reports",
+            embedding_function=LocalHashEmbeddingFunction(),
+        )
     return _collection
 
 

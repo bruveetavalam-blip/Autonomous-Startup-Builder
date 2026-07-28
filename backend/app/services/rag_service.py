@@ -12,6 +12,8 @@ def retrieve_context(query: str, limit: int = 4) -> list[dict]:
 def answer_with_rag(query: str, limit: int = 4) -> str:
     """Answer a query using retrieved reports as the primary context."""
     matches = retrieve_context(query, limit)
+    if not matches:
+        return "No stored startup reports were found in the knowledge base yet."
     context = "\n\n".join(item["document"] for item in matches)
     prompt = f"""Answer the user's question using the startup-report context below.
 If the context does not contain the answer, say so clearly.

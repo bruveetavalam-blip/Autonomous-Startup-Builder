@@ -8,6 +8,7 @@ from app.routers.competitor import router as competitor_router
 from app.routers.history import router as history_router
 from app.routers.marketing import router as marketing_router
 from app.routers.revenue import router as revenue_router
+from app.routers.research import router as research_router
 from app.routers.startup_builder import router as startup_builder_router
 from app.database.db import initialize_database
 
@@ -32,6 +33,7 @@ app.include_router(marketing_router)
 app.include_router(revenue_router)
 app.include_router(history_router)
 app.include_router(startup_builder_router)
+app.include_router(research_router)
 
 @app.get("/")
 def home():
