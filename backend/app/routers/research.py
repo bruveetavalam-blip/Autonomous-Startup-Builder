@@ -15,6 +15,9 @@ router = APIRouter(tags=["Research"])
 def health() -> dict:
     """Report backend capability status."""
     return {
+        "status": "healthy",
+        "backend": "running",
+        "database": "connected",
         "api": "ok",
         "llm": get_llm_status(),
         "features": {

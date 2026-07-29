@@ -1,0 +1,2 @@
+export const questions = ['What makes PulsePath defensible?', 'Summarize the competitive risks', 'Which customer segment should we test first?'];
+export const documents = [{name:'Employee wellness market notes',type:'Research brief',date:'Updated today'},{name:'PulsePath interview synthesis',type:'Customer research',date:'Updated yesterday'},{name:'Competitive positioning matrix',type:'Analysis',date:'Updated Jul 21'}];

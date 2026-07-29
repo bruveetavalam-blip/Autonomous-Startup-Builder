@@ -1,0 +1,10 @@
+import type { ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import { Check, Clock3, LoaderCircle } from 'lucide-react';
+import type { AgentState } from '../types';
+export const Card = ({children,className='' }: {children:ReactNode;className?:string}) => <motion.section whileHover={{y:-2}} className={`card ${className}`}>{children}</motion.section>;
+export const Button = ({children,variant='primary',className='',...props}: React.ButtonHTMLAttributes<HTMLButtonElement>&{variant?:'primary'|'secondary'|'ghost';className?:string}) => <button className={`button ${variant} ${className}`} {...props}>{children}</button>;
+export const Badge = ({children,tone='blue'}:{children:ReactNode;tone?:string}) => <span className={`badge ${tone}`}>{children}</span>;
+export const ScoreRing = ({score,size=116}:{score:number;size?:number}) => <div className="score-ring" style={{width:size,height:size,background:`conic-gradient(#1565c0 ${score * 3.6}deg, #e9eef5 0deg)`}}><div className="score-inner"><b>{score}%</b><span>complete</span></div></div>;
+export const AgentStatus = ({state}:{state:AgentState}) => <span className={`agent-status ${state}`}>{state === 'completed' ? <Check size={13}/> : state === 'running' ? <LoaderCircle size={13}/> : <Clock3 size={13}/>} {state}</span>;
+export const PageHeader = ({eyebrow,title,description,action}:{eyebrow?:string;title:string;description:string;action?:ReactNode}) => <div className="page-header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div>{action}</div>;

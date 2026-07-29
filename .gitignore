@@ -1,0 +1,9 @@
+# Local environments and dependency/build artifacts
+.env
+node_modules/
+dist/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
