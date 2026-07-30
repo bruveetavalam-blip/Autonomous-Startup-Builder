@@ -13,6 +13,7 @@ from app.routers.revenue import router as revenue_router
 from app.routers.research import router as research_router
 from app.routers.startup_builder import router as startup_builder_router
 from app.database.db import initialize_database
+from app.services.rag_service import index_saved_reports
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -20,6 +21,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 async def lifespan(_: FastAPI):
     """Initialize durable SQLite storage when the API starts."""
     initialize_database()
+    try:
+        index_saved_reports()
+    except Exception:
+        logging.getLogger(__name__).exception("Knowledge-base backfill failed during startup")
     yield
 
 app = FastAPI(

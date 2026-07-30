@@ -36,6 +36,15 @@ class LocalHashEmbeddingFunction:
             embeddings.append([value / norm for value in vector])
         return embeddings
 
+    # Chroma 1.x uses the explicit embedding protocol, while older releases
+    # call the embedding function directly. Supporting both keeps the local,
+    # no-download embedding implementation compatible across installations.
+    def embed_documents(self, input: list[str]) -> list[list[float]]:
+        return self(input)
+
+    def embed_query(self, input: list[str]) -> list[list[float]]:
+        return self(input)
+
 
 def initialize_database():
     """Create and return the persistent collection used for startup documents."""
@@ -61,11 +70,50 @@ def store_document(document: str, metadata: dict[str, Any] | None = None, docume
 
 def store_startup_package(startup_name: str, package: dict[str, Any], history_id: int) -> str:
     """Serialize and store a complete generated package for RAG retrieval."""
+    # A readable document gives both the vector search and the answering model
+    # useful section names, while metadata keeps the source report traceable.
+    document = format_startup_package(startup_name, package)
     return store_document(
-        json.dumps(package, ensure_ascii=False, default=str),
+        document,
         {"startup_name": startup_name, "history_id": history_id, "document_type": "startup_package"},
         document_id=f"startup-{history_id}",
     )
+
+
+def format_startup_package(startup_name: str, package: dict[str, Any]) -> str:
+    """Turn a report package into a compact, retrieval-friendly document."""
+    report = package.get("report") if isinstance(package.get("report"), dict) else package
+    sections = [
+        ("Startup", startup_name or report.get("startup") or package.get("idea")),
+        ("Idea analysis", report.get("analysis") or package.get("analysis")),
+        ("Market research", report.get("market") or package.get("market_insights")),
+        ("Competitor analysis", report.get("competitors") or package.get("competitors")),
+        ("Business plan", report.get("business_plan") or package.get("business_plan")),
+        ("Marketing strategy", report.get("marketing_strategy") or package.get("marketing")),
+        ("Revenue estimate", report.get("revenue_estimate") or package.get("revenue")),
+        ("Validation", report.get("validation") or package.get("validation")),
+        ("Sources", report.get("sources") or package.get("source_collector")),
+    ]
+    rendered = [f"Startup report: {startup_name}"]
+    for title, value in sections:
+        if value in (None, "", {}, []):
+            continue
+        text = value if isinstance(value, str) else json.dumps(_without_internal_notes(value), ensure_ascii=False, default=str)
+        rendered.append(f"\n## {title}\n{text}")
+    return "\n".join(rendered)
+
+
+def _without_internal_notes(value: Any) -> Any:
+    """Keep provider/runtime messages out of user-facing report retrieval."""
+    if isinstance(value, list):
+        return [_without_internal_notes(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _without_internal_notes(item)
+            for key, item in value.items()
+            if not (key == "notes" and isinstance(item, str) and "offline model generated" in item.lower())
+        }
+    return value
 
 
 def search_documents(query: str, limit: int = 5) -> list[dict[str, Any]]:

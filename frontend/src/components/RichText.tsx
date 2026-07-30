@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, isValidElement, type ReactNode } from 'react';
 
 const inline = (value: string): ReactNode[] => value.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`|\[[^\]]+\]\([^\)]+\))/g).filter(Boolean).map((token, index) => {
   if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) return <strong key={index}>{token.slice(2, -2)}</strong>;
@@ -24,8 +24,8 @@ export function parseStructuredValue(value: unknown): { type: 'text'; text: stri
 
 export function toReadableMarkdown(value: unknown): string { const parsed = parseStructuredValue(value); if (parsed.type === 'text') return parsed.text; if (Array.isArray(parsed.value)) return parsed.value.map(item => `- ${serializeInline(item)}`).join('\n'); return Object.entries(parsed.value as Record<string, unknown>).map(([key, item]) => `## ${key.replace(/_/g, ' ')}\n${Array.isArray(item) ? item.map(entry => `- ${serializeInline(entry)}`).join('\n') : serializeInline(item)}`).join('\n\n'); }
 
-export function RichText({ content, empty = 'This section is still being generated.' }: { content: unknown; empty?: string }) {
-  const parsed = parseStructuredValue(content); const raw = parsed.type === 'data' ? toReadableMarkdown(parsed.value) : parsed.text; if (!raw.trim()) return <p className="rich-empty">{empty}</p>;
+export function RichText({ content, empty = '' }: { content: unknown; empty?: string }) {
+  const parsed = parseStructuredValue(content); const raw = parsed.type === 'data' ? toReadableMarkdown(parsed.value) : parsed.text; if (!raw.trim()) return empty ? <p className="rich-empty">{empty}</p> : null;
   const lines = normalizeMarkdown(raw).split('\n'); const blocks: ReactNode[] = []; let index = 0;
   while (index < lines.length) {
     const line = lines[index].trim(); if (!line) { index += 1; continue; }
@@ -37,5 +37,21 @@ export function RichText({ content, empty = 'This section is still being generat
     const ordered = /^\d+[.)]\s+/.test(line); if (ordered || /^[-*+]\s+/.test(line)) { const items: string[] = []; const matcher = ordered ? /^\s*\d+[.)]\s+/ : /^\s*[-*+]\s+/; while (index < lines.length && matcher.test(lines[index])) items.push(lines[index++].replace(matcher, '')); const List = ordered ? 'ol' : 'ul'; blocks.push(<List key={`list-${index}`}>{items.map((item, i) => <li key={i}>{inline(item)}</li>)}</List>); continue; }
     const paragraph = [line]; index += 1; while (index < lines.length && lines[index].trim() && !/^(?:```|#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)/.test(lines[index].trim())) paragraph.push(lines[index++].trim()); let body = paragraph.join('\n'); if (/^\*\*[\s\S]{120,}\*\*$/.test(body)) body = body.slice(2, -2); blocks.push(<p key={`paragraph-${index}`}>{inline(body)}</p>);
   }
-  return <div className="rich-text">{blocks}</div>;
+  const hasBusinessSections = /(?:Executive Summary|Problem Statement|Solution|Target Customers?|Business Model|Marketing Strategy|Implementation Plan)/i.test(raw);
+  if (!hasBusinessSections) return <div className="rich-text">{blocks}</div>;
+
+  const placards: ReactNode[][] = [];
+  let current: ReactNode[] = [];
+  for (const block of blocks) {
+    // H3 headings are supporting labels (for example, the service list under
+    // "Solution"), so they stay in the same placard as their H2 section.
+    const isHeading = isValidElement(block) && typeof block.type === 'string' && /^h[12]$/.test(block.type);
+    if (isHeading && current.length) {
+      placards.push(current);
+      current = [];
+    }
+    current.push(block);
+  }
+  if (current.length) placards.push(current);
+  return <div className="rich-text section-placards">{placards.map((placard, index) => <section className={`section-placard ${index % 2 ? 'dark' : 'light'}`} key={index}>{placard}</section>)}</div>;
 }

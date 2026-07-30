@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, ExternalLink, FileText, Printer, TrendingUp } from 'lucide-react';
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
 import { Badge, Button, Card, PageHeader } from './ui';
@@ -93,6 +93,22 @@ async function exportDocx(report: BackendReport) {
 export function LiveReports() {
   const { report } = useStartup(); const [tab, setTab] = useState('Overview');
   const tabs = ['Overview', 'Business Plan', 'Competitors', 'Marketing', 'Revenue', 'Validation', 'Sources'];
+  const nextTab = tabs[(tabs.indexOf(tab) + 1) % tabs.length];
+  useEffect(() => {
+    const anchor = document.querySelector<HTMLElement>('.report-content > h1, .revenue-dashboard, .sources-grid, .validation-report');
+    if (!anchor) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'report-next-button';
+    button.textContent = `Next: ${nextTab} →`;
+    const goToNextTab = () => setTab(nextTab);
+    button.addEventListener('click', goToNextTab);
+    anchor.insertAdjacentElement('afterend', button);
+    return () => {
+      button.removeEventListener('click', goToNextTab);
+      button.remove();
+    };
+  }, [nextTab, tab]);
   const revenue = useMemo(() => normalizeRevenue(report), [report?.revenue_estimate]);
   const sources = sourceList(report || {});
   const competitors = useMemo(() => normalizeCompetitors(report || {}), [report?.competitors]);

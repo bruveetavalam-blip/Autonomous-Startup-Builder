@@ -23,6 +23,7 @@ from app.database.db import (
 )
 from app.services.business_service import generate_business_plan
 from app.services.competitor_service import get_competitors
+from app.services.chroma_service import store_startup_package
 from app.services.marketing_service import generate_marketing_strategy
 from app.services.report_service import build_structured_report, validate_startup_package
 from app.services.revenue_service import generate_revenue_estimate
@@ -139,6 +140,14 @@ def _record(job_id: str, startup_id: int, name: str, output: Any, error: str | N
             **outputs, "agent_status": agents, "errors": errors,
         })
         update_startup_report(startup_id, report)
+        if status == "completed":
+            # The workspace uses this asynchronous workflow. Index only after
+            # every agent has finished so knowledge-base answers see one
+            # coherent, complete report rather than partial fragments.
+            try:
+                store_startup_package(job["idea"], {"report": report}, startup_id)
+            except Exception:
+                logger.exception("Knowledge-base indexing failed for startup %s", startup_id)
 
 
 def _persist_output(startup_id: int, name: str, output: Any) -> None:
