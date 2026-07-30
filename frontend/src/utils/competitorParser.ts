@@ -23,6 +23,8 @@ const fields = {
   target_customers: ['target customers', 'target customer', 'customer segment', 'customers', 'audience', 'target audience'],
   market_position: ['market position', 'positioning', 'market positioning'],
   opportunity_gap: ['opportunity gap', 'market gap', 'positioning gap', 'gap'],
+  location: ['location', 'address', 'city', 'actual location', 'operating location'],
+  distance_km: ['distance', 'distance_km', 'distance in km', 'km away', 'miles away'],
   why_relevant: ['why it is relevant', 'why relevant', 'relevance', 'reason', 'selected for', 'selection reason'],
 } as const;
 
@@ -55,6 +57,8 @@ const normalizeRecord = (record: Record<string, unknown>, index: number): Compet
   target_customers: text(readField(record, 'target_customers')),
   market_position: text(readField(record, 'market_position')),
   opportunity_gap: text(readField(record, 'opportunity_gap')),
+  location: text(readField(record, 'location')),
+  distance_km: text(readField(record, 'distance_km')),
   why_relevant: text(readField(record, 'why_relevant')),
 });
 

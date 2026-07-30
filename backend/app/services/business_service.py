@@ -28,6 +28,9 @@ Competitor research:
 
 Use exactly these headings: Executive Summary, Problem Statement, Solution,
 Target Customers, Business Model, Revenue Model, Technology Stack, Future Scope.
+In the Executive Summary, include: business type, launch location, initial
+investment, target customer segments, projected break-even month, estimated
+ROI, and 3-5 key insights for the startup.
 Make realistic assumptions explicit, use bullet points where helpful, and ground
 recommendations in the supplied analysis and market evidence.
 Adapt market size, pricing, labour cost, startup cost, registrations, taxes,

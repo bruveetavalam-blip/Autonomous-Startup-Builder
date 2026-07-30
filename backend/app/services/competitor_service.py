@@ -18,6 +18,20 @@ def _clean_text(value: Any) -> str:
     return str(value)
 
 
+def _parse_distance(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = _clean_text(value)
+    if not text:
+        return None
+    match = re.search(r"([0-9]+(?:[.,][0-9]+)?)", text)
+    if match:
+        return float(match.group(1).replace(",", "."))
+    return None
+
+
 def _normalize_competitor(item: Any, index: int, location: dict | None) -> dict[str, Any]:
     if isinstance(item, dict):
         entry = {
@@ -35,6 +49,8 @@ def _normalize_competitor(item: Any, index: int, location: dict | None) -> dict[
             "target_customers": _clean_text(item.get("target_customers") or item.get("customer_segment") or item.get("audience") or ""),
             "market_position": _clean_text(item.get("market_position") or item.get("positioning") or ""),
             "opportunity_gap": _clean_text(item.get("opportunity_gap") or item.get("positioning_gap") or ""),
+            "location": _clean_text(item.get("location") or item.get("address") or item.get("city") or item.get("actual_location") or ""),
+            "distance_km": _parse_distance(item.get("distance_km") or item.get("distance") or item.get("distance_in_km")),
             "selected_for": _clean_text(item.get("selected_for") or item.get("selection_reason") or f"Selected as a relevant {(_clean_text(item.get('geography_tier')) or 'local')} competitor for {_location_text(location)}."),
         }
         return entry
@@ -50,6 +66,8 @@ def _normalize_competitor(item: Any, index: int, location: dict | None) -> dict[
         "target_customers": "",
         "market_position": "",
         "opportunity_gap": "",
+        "location": "",
+        "distance_km": None,
         "selected_for": f"Selected as a relevant local competitor for {_location_text(location)}.",
     }
 
@@ -130,7 +148,13 @@ Market search evidence:
     Find competitors in this order: local, regional, national, then international only if relevant.
     For Indian locations, prioritize neighborhood businesses, carts/outlets,
     regional brands, Indian national chains, and only then global brands.
-    Explain why each competitor was selected for this location.
+
+    Validate every competitor location before including it. If the startup specifies
+    a neighbourhood or city, include only competitors that actually operate there or
+    within a short local radius. Do not label a business as a local competitor if it
+    is outside the requested area. If local options are scarce, expand to nearby
+    localities and clearly state each competitor's actual location and approximate
+    distance from the target launch location.
 
     Return valid JSON only with this exact schema:
     {{
@@ -139,6 +163,8 @@ Market search evidence:
         {{
           "name": "",
           "geography_tier": "local|regional|national|international",
+          "location": "",
+          "distance_km": 0,
           "description": "",
           "why_relevant": "",
           "strengths": [""],

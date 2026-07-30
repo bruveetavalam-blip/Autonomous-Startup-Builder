@@ -31,6 +31,7 @@ class StartupWorkflowState(TypedDict, total=False):
     revenue: str
     validation: dict[str, Any]
     report: dict[str, Any]
+    location: dict[str, Any]
     history_id: int
     chroma_document_id: str | None
     storage_warning: str
@@ -46,7 +47,7 @@ def competitor_research_agent(state: StartupWorkflowState) -> StartupWorkflowSta
     market_research = search_market(state["idea"])
     state["market_research"] = market_research
     state["market_insights"] = process_market_data(market_research)
-    state["competitors"] = get_competitors(state["idea"], market_research)
+    state["competitors"] = get_competitors(state["idea"], market_research, location=state.get("location"))
     return state
 
 
@@ -56,6 +57,7 @@ def business_plan_agent(state: StartupWorkflowState) -> StartupWorkflowState:
         analysis=state.get("analysis"),
         market_insights=state.get("market_insights"),
         competitors=state.get("competitors"),
+        location=state.get("location"),
     )
     return state
 
@@ -66,6 +68,7 @@ def marketing_strategy_agent(state: StartupWorkflowState) -> StartupWorkflowStat
         analysis=state.get("analysis"),
         market_insights=state.get("market_insights"),
         competitors=state.get("competitors"),
+        location=state.get("location"),
     )
     return state
 
@@ -76,6 +79,7 @@ def revenue_estimation_agent(state: StartupWorkflowState) -> StartupWorkflowStat
         analysis=state.get("analysis"),
         market_insights=state.get("market_insights"),
         business_plan=state.get("business_plan"),
+        location=state.get("location"),
     )
     return state
 

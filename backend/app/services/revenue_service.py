@@ -32,14 +32,18 @@ Return ONLY valid JSON in Indian Rupees (INR), using this schema:
   "currency": "INR",
   "startup_cost": {{"items": [{{"name": "", "amount": 0}}], "total": 0}},
   "monthly_expenses": [{{"name": "", "amount": 0}}],
-  "revenue_projection": [{{"month": "M1", "revenue": 0, "expenses": 0, "profit": 0}}],
+  "revenue_projection": [{{"month": "M1", "revenue": 0, "expenses": 0, "profit": 0, "profit_label": ""}}],
   "break_even_month": 0,
   "funding_requirement": 0,
+  "estimated_roi": "",
+  "profitability_note": "",
   "assumptions": [],
   "notes": ""
 }}
 Use realistic INR values for an Indian startup. Use whole rupee numbers, not
 dollars, lakhs, or crores in the JSON. Include 12 monthly projection rows.
+For negative month profit, include a descriptive profit_label such as "Net Loss ₹1,14,015" and for positive profit use "Net Profit ₹35,985".
+Identify the estimated break-even month and clearly explain when profitability begins.
 Adapt labour, rent, compliance, tax, pricing, and funding assumptions to the location.
 """
     raw = generate_response(prompt)
