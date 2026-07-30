@@ -15,13 +15,56 @@ const text = (value: unknown) => {
   return parsed.type === 'data' ? toReadableMarkdown(parsed.value) : parsed.text;
 };
 const clean = cleanReportText;
-const sourceList = (report: BackendReport): Source[] => validSources(report);
-const locationText = (report: BackendReport) => [report.location?.city, report.location?.state, report.location?.country].filter(Boolean).join(', ') || 'India';
-const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const normalizeCompetitors = (report: BackendReport) => parseCompetitors(report.competitors);
+const sourceList = (report: BackendReport | null | undefined): Source[] => {
+  const sources = Array.isArray(report?.sources)
+    ? report.sources
+    : Array.isArray(report?.market?.sources)
+    ? report.market?.sources
+    : [];
+  return sources.filter((source) => source && source.url && cleanReportText(source.title));
+};
+const locationText = (report: BackendReport | null | undefined) =>
+  [report?.location?.city, report?.location?.state, report?.location?.country].filter(Boolean).join(', ') || 'India';
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const normalizeCompetitors = (report: BackendReport | null | undefined) => parseCompetitors(report?.competitors);
 const normalizeRevenue = (report?: BackendReport | null) => {
   const parsed = parseStructuredValue(report?.revenue_estimate);
-  return parsed.type === 'data' && parsed.value && typeof parsed.value === 'object' && !Array.isArray(parsed.value) ? parsed.value as RevenueModel : null;
+  if (parsed.type !== 'data' || !parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value)) {
+    return null;
+  }
+
+  const raw = parsed.value as Record<string, unknown>;
+  return {
+    currency: raw.currency === 'INR' ? 'INR' : 'INR',
+    startup_cost: typeof raw.startup_cost === 'object' && raw.startup_cost !== null && !Array.isArray(raw.startup_cost)
+      ? {
+          items: Array.isArray((raw.startup_cost as Record<string, unknown>).items)
+            ? ((raw.startup_cost as Record<string, unknown>).items as Array<{ name: string; amount: number }>).
+                filter((item): item is { name: string; amount: number } => !!item && typeof item === 'object' && typeof item.name === 'string' && typeof item.amount === 'number')
+            : [],
+          total: typeof (raw.startup_cost as Record<string, unknown>).total === 'number'
+            ? (raw.startup_cost as Record<string, unknown>).total as number
+            : undefined,
+        }
+      : undefined,
+    monthly_expenses: Array.isArray(raw.monthly_expenses)
+      ? (raw.monthly_expenses as Array<{ name: string; amount: number }>).
+          filter((item): item is { name: string; amount: number } => !!item && typeof item === 'object' && typeof item.name === 'string' && typeof item.amount === 'number')
+      : [],
+    revenue_projection: Array.isArray(raw.revenue_projection)
+      ? (raw.revenue_projection as Array<{ month: string; revenue: number; expenses: number; profit: number; profit_label?: string }>).
+          filter((item): item is { month: string; revenue: number; expenses: number; profit: number; profit_label?: string } =>
+            !!item && typeof item === 'object' && typeof item.month === 'string' && typeof item.revenue === 'number' && typeof item.expenses === 'number' && typeof item.profit === 'number'
+          )
+      : [],
+    break_even_month: typeof raw.break_even_month === 'number' ? raw.break_even_month : null,
+    funding_requirement: typeof raw.funding_requirement === 'number' ? raw.funding_requirement : undefined,
+    estimated_roi: typeof raw.estimated_roi === 'string' ? raw.estimated_roi : undefined,
+    profitability_note: typeof raw.profitability_note === 'string' ? raw.profitability_note : undefined,
+    assumptions: Array.isArray(raw.assumptions) ? (raw.assumptions as unknown[]).filter((item): item is string => typeof item === 'string') : [],
+    notes: typeof raw.notes === 'string' ? raw.notes : undefined,
+  };
 };
 const normalizeValidation = (report?: BackendReport | null) => {
   const parsed = parseStructuredValue(report?.validation);
