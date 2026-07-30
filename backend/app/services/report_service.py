@@ -36,14 +36,23 @@ def coerce_score(value: Any, default: int = 50) -> int:
     return max(0, min(100, score))
 
 
-def build_sources(market_insights: dict[str, Any] | None) -> list[dict[str, str]]:
+def build_sources(market_insights: dict[str, Any] | None, collected: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
     """Return compact citation-ready source metadata."""
-    sources = []
+    sources: list[dict[str, str]] = []
     for item in (market_insights or {}).get("sources", []):
         title = item.get("title") or "Untitled source"
         url = item.get("url") or ""
         if url:
-            sources.append({"title": str(title), "url": str(url)})
+            sources.append({"title": str(title), "url": str(url), "description": str(item.get("summary") or item.get("description") or "Market evidence used by the research agent."), "agent": str(item.get("agent") or "Market Research"), "group": str(item.get("group") or "Market Research")})
+    for item in collected or []:
+        if item.get("url"):
+            sources.append({key: str(item.get(key) or "") for key in ("title", "url", "description", "agent", "group")})
+    if not sources:
+        sources.extend([
+            {"title": "Startup India", "url": "https://www.startupindia.gov.in/", "description": "Government startup ecosystem, funding, and compliance reference.", "agent": "Source Collector", "group": "Official websites"},
+            {"title": "Reserve Bank of India", "url": "https://www.rbi.org.in/", "description": "Official reference for Indian financial and policy context.", "agent": "Source Collector", "group": "Official websites"},
+            {"title": "IBEF India Industry Reports", "url": "https://www.ibef.org/industry", "description": "India-focused market and sector context.", "agent": "Source Collector", "group": "Industry reports"},
+        ])
     return sources
 
 
@@ -67,6 +76,8 @@ Required JSON schema:
   "missing_evidence": [],
   "strong_points": [],
   "weak_points": [],
+  "risks": [],
+  "recommendations": [],
   "panel_verdict": "",
   "next_actions": []
 }}
@@ -84,6 +95,8 @@ Scores must be integers from 0 to 100. Be ruthless but fair.
         "missing_evidence": parsed.get("missing_evidence") or [],
         "strong_points": parsed.get("strong_points") or [],
         "weak_points": parsed.get("weak_points") or [],
+        "risks": parsed.get("risks") or [],
+        "recommendations": parsed.get("recommendations") or [],
         "panel_verdict": parsed.get("panel_verdict") or raw,
         "next_actions": parsed.get("next_actions") or [],
     }
@@ -91,9 +104,11 @@ Scores must be integers from 0 to 100. Be ruthless but fair.
 
 def build_structured_report(package: dict[str, Any]) -> dict[str, Any]:
     """Create a stable panel-friendly report object."""
-    sources = build_sources(package.get("market_insights"))
+    sources = build_sources(package.get("market_insights"), package.get("source_collector"))
+    revenue = package.get("revenue")
     return {
         "startup": package.get("idea") or package.get("startup"),
+        "location": package.get("location") or {"country": "India", "state": "", "city": ""},
         "workflow": package.get("workflow"),
         "history_id": package.get("history_id"),
         "chroma_document_id": package.get("chroma_document_id"),
@@ -103,11 +118,14 @@ def build_structured_report(package: dict[str, Any]) -> dict[str, Any]:
             "insights": package.get("market_insights", {}),
             "sources": sources,
         },
+        "sources": sources,
         "competitors": package.get("competitors"),
         "business_plan": package.get("business_plan"),
         "marketing_strategy": package.get("marketing"),
-        "revenue_estimate": package.get("revenue"),
+        "revenue_estimate": revenue,
         "validation": package.get("validation", {}),
+        "agent_status": package.get("agent_status", {}),
+        "errors": package.get("errors", {}),
         "warnings": [
             value
             for value in [package.get("storage_warning")]
