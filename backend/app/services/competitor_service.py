@@ -55,6 +55,8 @@ def _normalize_competitor(item: Any, index: int, location: dict | None) -> dict[
 
 
 def _parse_competitors(raw: str, location: dict | None) -> dict[str, Any]:
+    # Providers sometimes wrap otherwise valid JSON in a Markdown code fence.
+    raw = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", raw.strip(), flags=re.IGNORECASE)
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
