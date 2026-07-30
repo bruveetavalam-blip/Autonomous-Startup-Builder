@@ -47,13 +47,12 @@ def build_sources(market_insights: dict[str, Any] | None, collected: list[dict[s
     for item in collected or []:
         if item.get("url"):
             sources.append({key: str(item.get(key) or "") for key in ("title", "url", "description", "agent", "group")})
-    if not sources:
-        sources.extend([
-            {"title": "Startup India", "url": "https://www.startupindia.gov.in/", "description": "Government startup ecosystem, funding, and compliance reference.", "agent": "Source Collector", "group": "Official websites"},
-            {"title": "Reserve Bank of India", "url": "https://www.rbi.org.in/", "description": "Official reference for Indian financial and policy context.", "agent": "Source Collector", "group": "Official websites"},
-            {"title": "IBEF India Industry Reports", "url": "https://www.ibef.org/industry", "description": "India-focused market and sector context.", "agent": "Source Collector", "group": "Industry reports"},
-        ])
-    return sources
+    # Deduplicate URLs because both research agents can find the same source.
+    unique: dict[str, dict[str, str]] = {}
+    for source in sources:
+        if source["url"]:
+            unique.setdefault(source["url"], source)
+    return list(unique.values())
 
 
 def validate_startup_package(package: dict[str, Any]) -> dict[str, Any]:

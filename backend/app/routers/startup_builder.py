@@ -2,7 +2,8 @@
 
 import logging
 import re
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, status
+from app.database.mongo_store import get_job as get_mongo_job
 from app.models.startup_builder import StartupBuilderRequest
 from app.services.llm_service import LLMConfigurationError
 from app.services.async_workflow import AGENTS, get_job_snapshot, retry_agent, start_job
@@ -11,10 +12,10 @@ router = APIRouter(tags=["Startup Builder"])
 logger = logging.getLogger(__name__)
 
 @router.post("/startup-builder", status_code=status.HTTP_202_ACCEPTED)
-def startup_builder(request: StartupBuilderRequest) -> dict:
+def startup_builder(request: StartupBuilderRequest, x_user_id: int = Header(...)) -> dict:
     """Queue all independent agents and return before the first LLM finishes."""
     try:
-        return start_job(request.idea, {"country": request.country, "state": request.state, "city": request.city})
+        return start_job(request.idea, {"country": request.country, "state": request.state, "city": request.city}, x_user_id)
     except LLMConfigurationError as exc:
         logger.warning("Startup-builder LLM request failed: %s", exc)
         message = str(exc)
@@ -37,8 +38,10 @@ def startup_builder(request: StartupBuilderRequest) -> dict:
 
 
 @router.get("/startup-builder/{job_id}")
-def startup_builder_status(job_id: str) -> dict:
+def startup_builder_status(job_id: str, x_user_id: int = Header(...)) -> dict:
     """Return the current incremental report and agent states."""
+    if not get_mongo_job(job_id, x_user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Startup job not found")
     snapshot = get_job_snapshot(job_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Startup job not found")
@@ -46,11 +49,13 @@ def startup_builder_status(job_id: str) -> dict:
 
 
 @router.post("/startup-builder/{job_id}/agents/{agent_name}/retry")
-def retry_startup_agent(job_id: str, agent_name: str) -> dict:
+def retry_startup_agent(job_id: str, agent_name: str, x_user_id: int = Header(...)) -> dict:
     """Retry exactly one failed agent while preserving all completed work."""
     if agent_name not in AGENTS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown agent")
-    snapshot = retry_agent(job_id, agent_name)
+    if not get_mongo_job(job_id, x_user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Startup job not found")
+    snapshot = retry_agent(job_id, agent_name, x_user_id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Startup job not found")
     return snapshot

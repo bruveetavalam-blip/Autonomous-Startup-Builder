@@ -9,14 +9,14 @@ from app.database.db import get_history, get_startup
 from app.services.chroma_service import store_startup_package
 
 
-def retrieve_context(query: str, limit: int = 4) -> list[dict]:
+def retrieve_context(query: str, limit: int = 4, owner_user_id: int | None = None) -> list[dict]:
     """Retrieve relevant startup reports from ChromaDB."""
-    return search_documents(query, limit)
+    return search_documents(query, limit, owner_user_id)
 
 
-def answer_with_rag(query: str, limit: int = 4) -> str:
+def answer_with_rag(query: str, limit: int = 4, owner_user_id: int | None = None) -> str:
     """Answer a query using retrieved reports as the primary context."""
-    matches = retrieve_context(query, limit)
+    matches = retrieve_context(query, limit, owner_user_id)
     if not matches:
         return "No stored startup reports were found in the knowledge base yet."
     context = "\n\n".join(item["document"] for item in matches)

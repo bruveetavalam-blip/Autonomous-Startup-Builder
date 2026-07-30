@@ -1,6 +1,6 @@
 """Market data, RAG, and backend capability endpoints."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 from app.models.research import MarketResearchRequest, RAGQueryRequest
 from app.services.chroma_service import search_documents
@@ -48,16 +48,16 @@ def market_research(request: MarketResearchRequest) -> dict:
 
 
 @router.post("/rag/query")
-def rag_query(request: RAGQueryRequest) -> dict:
+def rag_query(request: RAGQueryRequest, x_user_id: int = Header(...)) -> dict:
     """Answer a question using stored startup reports."""
     return {
         "query": request.query,
-        "answer": answer_with_rag(request.query, request.limit),
-        "context": retrieve_context(request.query, request.limit),
+        "answer": answer_with_rag(request.query, request.limit, x_user_id),
+        "context": retrieve_context(request.query, request.limit, x_user_id),
     }
 
 
 @router.get("/knowledge-base/search")
-def knowledge_base_search(query: str, limit: int = 5) -> dict:
+def knowledge_base_search(query: str, limit: int = 5, x_user_id: int = Header(...)) -> dict:
     """Search the ChromaDB startup-report knowledge base."""
-    return {"query": query, "matches": search_documents(query, limit)}
+    return {"query": query, "matches": search_documents(query, limit, x_user_id)}

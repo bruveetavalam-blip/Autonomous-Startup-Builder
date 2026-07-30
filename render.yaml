@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: autonomous-startup-builder-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: SQLITE_PATH
+        value: /var/data/startup_builder.db
+      - key: CHROMA_PATH
+        value: /var/data/chroma_data
+      - key: MONGODB_DATABASE
+        value: autonomous_startup_builder
+      - key: MONGODB_URI
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false
+    disk:
+      name: workspace-data
+      mountPath: /var/data
+      sizeGB: 1
+
+  - type: web
+    name: autonomous-startup-builder-web
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false

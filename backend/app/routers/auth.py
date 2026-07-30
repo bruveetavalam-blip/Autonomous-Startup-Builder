@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.database.db import authenticate_user, create_user
+from app.database.mongo_store import sync_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -48,12 +49,14 @@ class UserResponse(BaseModel):
 def signup(payload: SignupRequest) -> dict:
     """Create a real persisted user account."""
     try:
-        return create_user(
+        user = create_user(
             full_name=payload.full_name,
             email=str(payload.email),
             password=payload.password,
             company=payload.company,
         )
+        sync_user(user)
+        return user
     except sqlite3.IntegrityError as exc:
         if "users.email" in str(exc) or "UNIQUE constraint failed" in str(exc):
             raise HTTPException(
@@ -72,4 +75,5 @@ def login(payload: LoginRequest) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
         )
+    sync_user(user)
     return user

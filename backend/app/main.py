@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,7 @@ from app.routers.revenue import router as revenue_router
 from app.routers.research import router as research_router
 from app.routers.startup_builder import router as startup_builder_router
 from app.database.db import initialize_database
+from app.database.mongo_store import initialize_mongodb
 from app.services.rag_service import index_saved_reports
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -21,6 +23,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 async def lifespan(_: FastAPI):
     """Initialize durable SQLite storage when the API starts."""
     initialize_database()
+    initialize_mongodb()
     try:
         index_saved_reports()
     except Exception:
@@ -32,6 +35,12 @@ app = FastAPI(
     version="1.0",
     lifespan=lifespan,
 )
+
+configured_origins = [
+    origin.strip()
+    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +54,7 @@ app.add_middleware(
         "http://[::1]:5173",
         "http://[::1]:5174",
         "http://[::1]:5175",
+        *configured_origins,
     ],
     allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|\[::1\]):517\d$",
     allow_credentials=True,

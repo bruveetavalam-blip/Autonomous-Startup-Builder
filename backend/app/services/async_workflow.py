@@ -21,6 +21,8 @@ from app.database.db import (
     update_startup_report,
     update_startup_section,
 )
+from app.database.db import get_startup
+from app.database.mongo_store import sync_job, sync_startup
 from app.services.business_service import generate_business_plan
 from app.services.competitor_service import get_competitors
 from app.services.chroma_service import store_startup_package
@@ -50,14 +52,21 @@ def _lock_for(job_id: str) -> threading.Lock:
         return _locks.setdefault(job_id, threading.Lock())
 
 
-def _source_collector(idea: str) -> list[dict[str, str]]:
-    """Return stable, real references used for assumptions and discovery."""
+def _source_collector(idea: str, location: dict[str, str]) -> list[dict[str, str]]:
+    """Collect current, idea-specific web sources instead of static links."""
+    query = f"{idea} {_location_text(location)} market size regulations competitors customer demand"
+    research = search_market(query)
+    live_sources = process_market_data(research).get("sources", [])
     return [
-        {"title": "Reserve Bank of India - Digital Payments", "url": "https://www.rbi.org.in/", "description": "Official Indian payments and financial-system reference.", "agent": "Source Collector", "group": "Official websites"},
-        {"title": "Startup India", "url": "https://www.startupindia.gov.in/", "description": "Government startup ecosystem, funding, and compliance reference.", "agent": "Source Collector", "group": "Industry Reports"},
-        {"title": "Google Trends", "url": "https://trends.google.com/", "description": "Demand and search-interest validation reference for the idea.", "agent": "Source Collector", "group": "Market Research"},
-        {"title": "IBEF India Industry Reports", "url": "https://www.ibef.org/industry", "description": "India-focused sector and market context.", "agent": "Source Collector", "group": "Industry Reports"},
-        {"title": "Similarweb", "url": "https://www.similarweb.com/", "description": "Traffic and competitor discovery reference.", "agent": "Source Collector", "group": "Competitor Research"},
+        {
+            "title": str(item.get("title") or "Untitled source"),
+            "url": str(item.get("url") or ""),
+            "description": str(item.get("summary") or "Current web research relevant to this startup.")[:500],
+            "agent": "Live Source Collector",
+            "group": "Live web research",
+        }
+        for item in live_sources
+        if item.get("url")
     ]
 
 
@@ -82,7 +91,7 @@ def _run_agent(name: str, idea: str, location: dict[str, str]) -> Any:
     if name == "validation":
         return validate_startup_package({"idea": idea, "location": location})
     if name == "source_collector":
-        return _source_collector(idea)
+        return _source_collector(idea, location)
     raise ValueError(f"Unknown agent: {name}")
 
 
@@ -95,28 +104,34 @@ def _agent_status() -> dict[str, dict[str, Any]]:
     return {name: {"label": data["label"], "status": "running", "progress": 0, "started_at": now} for name, data in AGENTS.items()}
 
 
-def start_job(idea: str, location: dict[str, str] | None = None) -> dict[str, Any]:
+def start_job(idea: str, location: dict[str, str] | None = None, owner_user_id: int = 0) -> dict[str, Any]:
     """Create a draft report and schedule all independent agents immediately."""
     location = location or {"country": "India", "state": "", "city": ""}
     startup_id = save_startup(idea, "", "", "", "", "", report=_initial_report(idea))
     job_id = create_startup_job(idea, startup_id, location)
+    startup = get_startup(startup_id)
+    if startup:
+        sync_startup(startup, owner_user_id)
     snapshot = {"agents": _agent_status(), "outputs": {}, "errors": {}, "status": "running"}
     update_startup_job(job_id, **snapshot)
+    job = get_startup_job(job_id)
+    if job:
+        sync_job(job, owner_user_id)
     for name in AGENTS:
-        _executor.submit(_execute_agent, job_id, startup_id, idea, location, name)
+        _executor.submit(_execute_agent, job_id, startup_id, idea, location, name, owner_user_id)
     return get_job_snapshot(job_id) or {"job_id": job_id, "startup_id": startup_id, **snapshot}
 
 
-def _execute_agent(job_id: str, startup_id: int, idea: str, location: dict[str, str], name: str) -> None:
+def _execute_agent(job_id: str, startup_id: int, idea: str, location: dict[str, str], name: str, owner_user_id: int) -> None:
     try:
         output = _run_agent(name, idea, location)
-        _record(job_id, startup_id, name, output, None)
+        _record(job_id, startup_id, name, output, None, owner_user_id)
     except Exception as exc:  # isolated failure by design
         logger.exception("Agent %s failed for job %s", name, job_id)
-        _record(job_id, startup_id, name, None, str(exc))
+        _record(job_id, startup_id, name, None, str(exc), owner_user_id)
 
 
-def _record(job_id: str, startup_id: int, name: str, output: Any, error: str | None) -> None:
+def _record(job_id: str, startup_id: int, name: str, output: Any, error: str | None, owner_user_id: int) -> None:
     with _lock_for(job_id):
         job = get_startup_job(job_id)
         if not job:
@@ -140,12 +155,18 @@ def _record(job_id: str, startup_id: int, name: str, output: Any, error: str | N
             **outputs, "agent_status": agents, "errors": errors,
         })
         update_startup_report(startup_id, report)
+        startup = get_startup(startup_id)
+        if startup:
+            sync_startup(startup, owner_user_id)
+        updated_job = get_startup_job(job_id)
+        if updated_job:
+            sync_job(updated_job, owner_user_id)
         if status == "completed":
             # The workspace uses this asynchronous workflow. Index only after
             # every agent has finished so knowledge-base answers see one
             # coherent, complete report rather than partial fragments.
             try:
-                store_startup_package(job["idea"], {"report": report}, startup_id)
+                store_startup_package(job["idea"], {"report": report}, startup_id, owner_user_id)
             except Exception:
                 logger.exception("Knowledge-base indexing failed for startup %s", startup_id)
 
@@ -158,7 +179,7 @@ def _persist_output(startup_id: int, name: str, output: Any) -> None:
         update_startup_section(startup_id, name, output)
 
 
-def retry_agent(job_id: str, name: str) -> dict[str, Any] | None:
+def retry_agent(job_id: str, name: str, owner_user_id: int = 0) -> dict[str, Any] | None:
     job = get_startup_job(job_id)
     if not job or name not in AGENTS:
         return None
@@ -166,7 +187,10 @@ def retry_agent(job_id: str, name: str) -> dict[str, Any] | None:
         job["agents"][name].update({"status": "running", "progress": 0})
         job["errors"].pop(name, None)
         update_startup_job(job_id, agents=job["agents"], outputs=job["outputs"], errors=job["errors"], status="running")
-    _executor.submit(_execute_agent, job_id, job["startup_id"], job["idea"], job["location"], name)
+    updated_job = get_startup_job(job_id)
+    if updated_job:
+        sync_job(updated_job, owner_user_id)
+    _executor.submit(_execute_agent, job_id, job["startup_id"], job["idea"], job["location"], name, owner_user_id)
     return get_job_snapshot(job_id)
 
 

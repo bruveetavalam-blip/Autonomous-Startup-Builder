@@ -68,14 +68,14 @@ def store_document(document: str, metadata: dict[str, Any] | None = None, docume
     return identifier
 
 
-def store_startup_package(startup_name: str, package: dict[str, Any], history_id: int) -> str:
+def store_startup_package(startup_name: str, package: dict[str, Any], history_id: int, owner_user_id: int | None = None) -> str:
     """Serialize and store a complete generated package for RAG retrieval."""
     # A readable document gives both the vector search and the answering model
     # useful section names, while metadata keeps the source report traceable.
     document = format_startup_package(startup_name, package)
     return store_document(
         document,
-        {"startup_name": startup_name, "history_id": history_id, "document_type": "startup_package"},
+        {"startup_name": startup_name, "history_id": history_id, "owner_user_id": owner_user_id, "document_type": "startup_package"},
         document_id=f"startup-{history_id}",
     )
 
@@ -116,9 +116,12 @@ def _without_internal_notes(value: Any) -> Any:
     return value
 
 
-def search_documents(query: str, limit: int = 5) -> list[dict[str, Any]]:
+def search_documents(query: str, limit: int = 5, owner_user_id: int | None = None) -> list[dict[str, Any]]:
     """Retrieve documents semantically similar to a user query."""
-    result = initialize_database().query(query_texts=[query], n_results=limit)
+    options: dict[str, Any] = {"query_texts": [query], "n_results": limit}
+    if owner_user_id is not None:
+        options["where"] = {"owner_user_id": str(owner_user_id)}
+    result = initialize_database().query(**options)
     documents = result.get("documents", [[]])[0]
     metadatas = result.get("metadatas", [[]])[0]
     distances = result.get("distances", [[]])[0]
